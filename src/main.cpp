@@ -1,5 +1,6 @@
 #include "main.h"
 #include "esp_task_wdt.h"
+AutoAnalog aaAudio;
 U8G2_SH1106_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/PIN_OLED_CS, /* dc=*/PIN_OLED_DC, /* reset=*/PIN_OLED_RST);
 Button buttonMod, buttonTX;
 void ledRed_on()
@@ -27,33 +28,6 @@ void task_button(void *)
         delay(10);
     }
 }
-uint8_t dac_buffer[2][4096];
-int buffer_size = 0;
-bool buffer_ready = false;
-int buffer_index_playing = 0;
-bool isMusicPlaying = false;
-void task_dac_feeder(void *)
-{
-    static int current_buffer_size = 0;
-    while (1)
-    {
-        while (buffer_ready == false)
-        {
-            dac_output_voltage(DAC_CHANNEL_1, 128);
-            delay(5);
-        }
-        current_buffer_size = buffer_size;
-        buffer_ready = false;
-        for (int i = 0; i < current_buffer_size; i++)
-        {
-            dac_output_voltage(DAC_CHANNEL_1, dac_buffer[buffer_index_playing][i]);
-            usleep(1000 / 8);
-        }
-        buffer_index_playing += 1;
-        buffer_index_playing &= 1;
-        esp_task_wdt_reset();
-    }
-}
 SemaphoreHandle_t audio_start_decode;
 uint8_t *opus_list[256] = {NULL};
 int opus_list_size[256] = {0};
@@ -72,15 +46,8 @@ void task_audio(void *)
         // uint8_t *data_ptr = audio_encode_packet(&len);
         for (int current_opus_index = 0; current_opus_index < total_opus_pkt; ++current_opus_index)
         {
-            isMusicPlaying = true;
-            while (buffer_ready == true)
-                delay(5);
-            audio_decode_packet(opus_list[current_opus_index], opus_list_size[current_opus_index], dac_buffer[buffer_index_playing == 1 ? 0 : 1], &buffer_size);
-            buffer_ready = true;
         }
-        isMusicPlaying = false;
 #else
-        isMusicPlaying = false;
         if (total_opus_pkt > current_opus_index)
         {
             if (start_transmit)
@@ -249,7 +216,7 @@ void morse_tx_string(const char *str)
                         encode_packet(0x03, &data, 1);
                         channel_sync(6);
                         send_packet();
-                delay(2);
+                        delay(2);
                     }
                     data = 0xaa;
                     encode_packet(0x03, &data, 1);
@@ -573,13 +540,15 @@ void setup()
     u8g2.sendBuffer();
 #endif
     protocol_init();
-    dac_output_enable(DAC_CHANNEL_1);
-    audio_adc_init();
+
+    aaAudio.begin(1, 1);    // Start AAAudio with only the DAC (ADC,DAC,External ADC)
+    aaAudio.autoAdjust = 0; // Disable automatic timer adjustment
+    aaAudio.setSampleRate(16000);
+    aaAudio.dacBitsPerSample = 8;
     audio_codec_init();
     buttonMod.init(PIN_KEY1);
     buttonTX.init(PIN_KEY2);
     xTaskCreatePinnedToCore(task_button, "task_button", 2048, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(task_dac_feeder, "task_dac_feeder", 4096, NULL, 20, NULL, 0);
     beeper.init();
     audio_start_decode = xSemaphoreCreateBinary();
     delay(100);

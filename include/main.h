@@ -2,11 +2,12 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <U8g2lib.h>
+#include "AutoAnalogAudio.h"
 #include "protocol.h"
 #include "button.h"
 #include "audio.h"
 #include "beeper.h"
-#define DEVICE_IS_RECEIVER
+// #define DEVICE_IS_RECEIVER
 #define STOP_BIT_LEN_2
 // #define TX_DEBUG_MODE
 // #define RX_DEBUG_MODE
@@ -40,12 +41,7 @@
 
 extern U8G2_SH1106_128X64_NONAME_F_4W_HW_SPI u8g2;
 
-extern uint8_t dac_buffer[2][4096];
-extern int buffer_size;
-extern bool buffer_ready;
-extern int buffer_index_playing;
 extern int total_opus_pkt;
-extern bool isMusicPlaying;
 void ledRed_on();
 void ledRed_off();
 void ledGreen_on();
@@ -64,3 +60,5 @@ char findMorse(const char *morse);
 char *findMorseReverse(char ascii);
 #define LONG_THRESHOLD 200
 #define GAP_THRESHOLD 450
+
+extern AutoAnalog aaAudio;

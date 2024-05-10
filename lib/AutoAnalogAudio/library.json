@@ -1,0 +1,29 @@
+{
+  "name": "AutoAnalogAudio",
+  "keywords": "Due, DAC, ADC, Timers, DMA, Audio, Analog",
+  "description": "Automated analog reads and analog output (streaming) using Arduino Due DAC, ADC, DMA & Timers",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/TMRh20/AutoAnalogAudio.git"
+  },
+  "authors":
+  {
+    "name": "TMRh20",
+    "email": "tmrh20@gmail.com",
+    "url": "https://tmrh20.github.io/AutoAnalogAudio/",
+    "maintainer": true
+  },
+  "version": "1.50.0",
+  "frameworks": "arduino",
+  "platforms": 
+  [
+    "atmelavr",
+    "atmelsam",
+    "espressifesp32",
+    "nordicnrf52"
+  ],
+  "export": {
+    "exclude": "examples/*/*.wav"
+  }
+}

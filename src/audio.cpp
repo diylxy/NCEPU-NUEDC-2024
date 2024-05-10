@@ -11,20 +11,6 @@ int opus_samples_out_size_;
 uint8_t *opus_bits_;
 int opus_bits_size_ = 1024;
 
-ADCSampler *adcSampler = NULL;
-// i2s config for using the internal ADC
-i2s_config_t adcI2SConfig = {
-    .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_ADC_BUILT_IN),
-    .sample_rate = 8000,
-    .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-    .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
-    .communication_format = I2S_COMM_FORMAT_I2S_LSB,
-    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-    .dma_buf_count = 4,
-    .dma_buf_len = 1024,
-    .use_apll = false,
-    .tx_desc_auto_clear = false,
-    .fixed_mclk = 0};
 void audio_codec_init()
 {
     // configure encoder
@@ -60,22 +46,21 @@ void audio_codec_init()
 
     opus_bits_ = (uint8_t *)malloc(sizeof(uint8_t) * opus_bits_size_);
 }
-void audio_dac_init()
-{
-}
-void audio_adc_init()
-{
-    adcSampler = new ADCSampler(ADC_UNIT_1, ADC1_CHANNEL_4, adcI2SConfig);
-    adcSampler->start();
-    // init ADC pad
-    // i2s_set_adc_mode(ADC_UNIT_1, ADC1_CHANNEL_4);
-    // enable the adc
-    // i2s_adc_enable(I2S_NUM_0);
-}
 
 uint8_t *audio_encode_packet(int *len)
 {
-    adcSampler->read(opus_samples_, opus_samples_size_);
+    static bool firstadc = false;
+    if(firstadc == false)
+    {
+        aaAudio.getADC(opus_samples_size_);
+        firstadc = true;
+    }
+    aaAudio.getADC(opus_samples_size_);
+    for(int i = 0; i < opus_samples_size_; i++)
+    {
+        Serial.printf("%d, ", aaAudio.adcBuffer16[i]);
+        opus_samples_[i] = (int16_t)aaAudio.adcBuffer16[i] - 24823;
+    }
     *len = opus_encode(opus_encoder_, opus_samples_, opus_samples_size_, opus_bits_, opus_bits_size_);
     return opus_bits_;
 }
