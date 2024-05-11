@@ -13,11 +13,13 @@ static const uint8_t sinewave[] = {
     127, 217, 255, 217, 127, 90, 0, 90};
 static void sendSineWave10ms()
 {
-    while (buffer_ready == true)
-        delay(5);
+    int next_buf;
+    while (buffer_ready[0] == true && buffer_ready[1] == true)
+        delay(2);
+    next_buf = buffer_ready[0] == true ? 1 : 0;
+    memcpy(dac_buffer[next_buf], sinewave, sizeof(sinewave));
     buffer_size = sizeof(sinewave);
-    memcpy(dac_buffer[buffer_index_playing == 1 ? 0 : 1], sinewave, sizeof(sinewave));
-    buffer_ready = true;
+    buffer_ready[next_buf] = true;
 }
 Beeper beeper;
 int beep_remain = 0;
@@ -25,7 +27,7 @@ void task_beeper(void *)
 {
     while (1)
     {
-        if(isMusicPlaying)
+        if (isMusicPlaying)
             beep_remain = 0;
         if (beep_remain <= 0)
         {

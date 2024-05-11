@@ -19,19 +19,19 @@ void ADCSampler::unConfigureI2S()
     // make sure ot do this or the ADC is locked
     i2s_adc_disable(m_i2sPort);
 }
+int16_t tmp_samples[4096];
 int ADCSampler::read(int16_t *samples, int count)
 {
     // read from i2s
     size_t bytes_read = 0;
-    i2s_read(m_i2sPort, samples, sizeof(int16_t) * count, &bytes_read, portMAX_DELAY);
+    i2s_read(m_i2sPort, tmp_samples, sizeof(int16_t) * count * 2, &bytes_read, portMAX_DELAY);
     int samples_read = bytes_read / sizeof(int16_t);
     for (int i = 0; i < samples_read; i += 2)
     {
-        samples[i] = samples[i] - 16384;
-        samples[i] = (samples[i] + 700);
-        samples[i] <<= 4;
-        samples[i] = samples[i] - 32768;
-        samples[i] *= 2;
+        tmp_samples[i] = tmp_samples[i] - 16384;
+        tmp_samples[i] = (tmp_samples[i] + 700 - 2048);
+        tmp_samples[i] *= 16;
+        samples[i >> 1] = tmp_samples[i];
     }
-    return samples_read;
+    return samples_read / 2;
 }

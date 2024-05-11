@@ -6,6 +6,5 @@
 void protocol_init();
 
 void encode_packet(uint8_t type, const uint8_t *dat, uint16_t size);
-void encode_packet_opus(uint8_t type, const uint8_t *dat, uint16_t size);
 void channel_sync(uint8_t bytes);
 void send_packet();

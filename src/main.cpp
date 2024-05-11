@@ -29,54 +29,77 @@ void task_button(void *)
 }
 uint8_t dac_buffer[2][4096];
 int buffer_size = 0;
-bool buffer_ready = false;
-int buffer_index_playing = 0;
+bool buffer_ready[2] = {false, false};
 bool isMusicPlaying = false;
+
 void task_dac_feeder(void *)
 {
     static int current_buffer_size = 0;
     while (1)
     {
-        while (buffer_ready == false)
+        while (buffer_ready[0] == false && buffer_ready[1] == false)
         {
             dac_output_voltage(DAC_CHANNEL_1, 128);
             delay(5);
         }
+        int next_buf = buffer_ready[0] == true ? 0 : 1;
         current_buffer_size = buffer_size;
-        buffer_ready = false;
         for (int i = 0; i < current_buffer_size; i++)
         {
-            dac_output_voltage(DAC_CHANNEL_1, dac_buffer[buffer_index_playing][i]);
+            dac_output_voltage(DAC_CHANNEL_1, dac_buffer[next_buf][i]);
             usleep(1000 / 8);
         }
-        buffer_index_playing += 1;
-        buffer_index_playing &= 1;
+        buffer_ready[next_buf] = false;
         esp_task_wdt_reset();
     }
 }
+
 SemaphoreHandle_t audio_start_decode;
-uint8_t *opus_list[256] = {NULL};
-int opus_list_size[256] = {0};
+uint8_t *opus_list[512] = {NULL};
+int opus_list_size[512] = {0};
 int total_opus_pkt = 0;
 #ifndef DEVICE_IS_RECEIVER
 int current_opus_index = 0;
 bool start_transmit = false;
 #endif
+// #define DEBUG_TRANSMIT_LOOP
 void task_audio(void *)
 {
     while (1)
     {
+#ifdef DEBUG_TRANSMIT_LOOP
+
+        xSemaphoreTake(audio_start_decode, portMAX_DELAY);
+        // int len;
+        // uint8_t *data_ptr = audio_encode_packet(&len);
+        for (int current_opus_index = 0; current_opus_index < total_opus_pkt; ++current_opus_index)
+        {
+            int next_buf;
+            isMusicPlaying = true;
+            while (buffer_ready[0] == true && buffer_ready[1] == true)
+                vTaskDelay(2);
+            next_buf = buffer_ready[0] == true ? 1 : 0;
+            audio_decode_packet(opus_list[current_opus_index], opus_list_size[current_opus_index], dac_buffer[next_buf], &buffer_size);
+            buffer_ready[next_buf] = true;
+            esp_task_wdt_reset();
+        }
+        isMusicPlaying = false;
+        return;
+#endif
 #ifdef DEVICE_IS_RECEIVER
         xSemaphoreTake(audio_start_decode, portMAX_DELAY);
         // int len;
         // uint8_t *data_ptr = audio_encode_packet(&len);
         for (int current_opus_index = 0; current_opus_index < total_opus_pkt; ++current_opus_index)
         {
+            int next_buf;
             isMusicPlaying = true;
-            while (buffer_ready == true)
-                delay(5);
-            audio_decode_packet(opus_list[current_opus_index], opus_list_size[current_opus_index], dac_buffer[buffer_index_playing == 1 ? 0 : 1], &buffer_size);
-            buffer_ready = true;
+            while (buffer_ready[0] == true && buffer_ready[1] == true)
+                vTaskDelay(2);
+            next_buf = buffer_ready[0] == true ? 1 : 0;
+            audio_decode_packet(opus_list[current_opus_index], opus_list_size[current_opus_index], dac_buffer[next_buf], &buffer_size);
+            buffer_ready[next_buf] = true;
+            esp_task_wdt_reset();
         }
         isMusicPlaying = false;
 #else
@@ -85,8 +108,8 @@ void task_audio(void *)
         {
             if (start_transmit)
             {
-                encode_packet_opus(0x21, opus_list[current_opus_index], opus_list_size[current_opus_index]);
-                channel_sync(3);
+                encode_packet(0x21, opus_list[current_opus_index], opus_list_size[current_opus_index]);
+                channel_sync(2);
                 send_packet();
                 current_opus_index += 1;
             }
@@ -101,7 +124,7 @@ void task_audio(void *)
 }
 void resetOpusList()
 {
-    for (int i = 0; i < 256; ++i)
+    for (int i = 0; i < 512; ++i)
     {
         if (opus_list[i] != NULL)
         {
@@ -116,7 +139,7 @@ void resetOpusList()
 }
 void appendOpusPacket(uint8_t *pkt, size_t size)
 {
-    if (total_opus_pkt >= 256)
+    if (total_opus_pkt >= 512)
     {
         return;
     }
@@ -249,7 +272,7 @@ void morse_tx_string(const char *str)
                         encode_packet(0x03, &data, 1);
                         channel_sync(6);
                         send_packet();
-                delay(2);
+                        delay(2);
                     }
                     data = 0xaa;
                     encode_packet(0x03, &data, 1);
@@ -504,6 +527,9 @@ void transmitter_fn_recorder()
                 u8g2.sendBuffer();
                 delay(5);
             }
+#ifdef DEBUG_TRANSMIT_LOOP
+            xSemaphoreGive(audio_start_decode);
+#else
             start_transmit = true;
             while (total_opus_pkt != current_opus_index)
             {
@@ -525,6 +551,7 @@ void transmitter_fn_recorder()
             u8g2.drawUTF8(10, 18, "功能 音频传输");
             u8g2.drawUTF8(10, 36, "已通知对端解码");
             u8g2.sendBuffer();
+#endif
         }
         if (buttonMod.isPressed())
         {
@@ -580,6 +607,7 @@ void setup()
     buttonTX.init(PIN_KEY2);
     xTaskCreatePinnedToCore(task_button, "task_button", 2048, NULL, 1, NULL, 1);
     xTaskCreatePinnedToCore(task_dac_feeder, "task_dac_feeder", 4096, NULL, 20, NULL, 0);
+    // example_tg_timer_init(TIMER_GROUP_0,TIMER_0);
     beeper.init();
     audio_start_decode = xSemaphoreCreateBinary();
     delay(100);

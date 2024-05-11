@@ -97,22 +97,6 @@ void encode_packet(uint8_t type, const uint8_t *dat, uint16_t size)
     packet_buffer[size + 3] = 0xAA;
     packet_size = size + 4;
 }
-void encode_packet_opus(uint8_t type, const uint8_t *dat, uint16_t size)
-{
-    if (size > 1020)
-    {
-        Serial.println("opus packet size too large");
-        return;
-    }
-    packet_buffer[0] = 0x55;
-    packet_buffer[1] = type;
-    packet_buffer[2] = size >> 8;
-    packet_buffer[3] = size & 0xff;
-    memcpy(packet_buffer + 4, dat, size);
-    packet_buffer[size + 4] = calculate_checksum8(packet_buffer + 2, size + 2);
-    packet_buffer[size + 5] = 0xAA;
-    packet_size = size + 6;
-}
 void channel_sync(uint8_t bytes)
 {
     ledRed_on();
@@ -391,12 +375,11 @@ void pkt_processor_0x20()
 }
 void pkt_processor_0x21()
 {
-    uint16_t opus_size = (packet_buffer[2] << 8) | packet_buffer[3];
     if (last_pkt_type != 0x21)
     {
         last_pkt_type = 0x21;
     }
-    appendOpusPacket(packet_buffer + 4, opus_size);
+    appendOpusPacket(packet_buffer + 2, 8);
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_wqy14_t_gb2312);
     u8g2.drawUTF8(10, 18, "功能 音频传输");
@@ -522,7 +505,7 @@ static void task_serial2(void *)
             payload_len = 1;
             break;
         case 0x21:
-            payload_len = 0xffff;
+            payload_len = 8;
             break;
         case 0x22:
             payload_len = 1;
@@ -530,26 +513,10 @@ static void task_serial2(void *)
         default:
             continue;
         }
-        if (payload_len != 0xffff)
-        {
             for (int i = 0; i < payload_len; ++i)
             {
                 packet_buffer[i + 2] = serial_read();
             }
-        }
-        else
-        {
-            packet_buffer[2] = serial_read();
-            packet_buffer[3] = serial_read();
-            payload_len = (packet_buffer[2] << 8) | packet_buffer[3];
-            if(payload_len > 1020)
-                continue;
-            for (int i = 0; i < payload_len; ++i)
-            {
-                packet_buffer[i + 4] = serial_read();
-            }
-            payload_len += 2;
-        }
         packet_buffer[payload_len + 2] = serial_read();
 #ifdef RX_DEBUG_MODE
         Serial.println("checksum");
