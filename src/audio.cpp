@@ -1,7 +1,7 @@
 #include "main.h"
 
-const int mode=CODEC2_MODE_1600;
-const int natural=1;
+const int mode = CODEC2_MODE_1600;
+const int natural = 1;
 
 CODEC2 *codec2;
 int codec_samples_cnt, codec_encoded_bits_cnt, codec_encoded_byte, i, frames, bits_proc, bit_errors, error_mode;
@@ -26,17 +26,17 @@ i2s_config_t adcI2SConfig = {
     .fixed_mclk = 0};
 void audio_codec_init()
 {
-  codec2 = codec2_create(mode);
-  codec_samples_cnt = codec2_samples_per_frame(codec2);
-  codec_encoded_bits_cnt = codec2_bits_per_frame(codec2);
-  codec_decoded_buffer = (short*)malloc(codec_samples_cnt*sizeof(short));
-  codec_encoded_byte = (codec_encoded_bits_cnt + 7) / 8;
-  codec_encoded_buffer = (unsigned char*)malloc(codec_encoded_byte*sizeof(char));
-  frames = bit_errors = bits_proc = 0;
-  codec_encoded_bits_start = 0;
-  codec_encoded_bits_end = codec_encoded_bits_cnt-1;
+    codec2 = codec2_create(mode);
+    codec_samples_cnt = codec2_samples_per_frame(codec2);
+    codec_encoded_bits_cnt = codec2_bits_per_frame(codec2);
+    codec_decoded_buffer = (short *)malloc(codec_samples_cnt * sizeof(short));
+    codec_encoded_byte = (codec_encoded_bits_cnt + 7) / 8;
+    codec_encoded_buffer = (unsigned char *)malloc(codec_encoded_byte * sizeof(char));
+    frames = bit_errors = bits_proc = 0;
+    codec_encoded_bits_start = 0;
+    codec_encoded_bits_end = codec_encoded_bits_cnt - 1;
 
-  codec2_set_natural_or_gray(codec2, !natural);  
+    codec2_set_natural_or_gray(codec2, !natural);
 }
 void audio_dac_init()
 {
@@ -46,15 +46,13 @@ void audio_adc_init()
     adcSampler = new ADCSampler(ADC_UNIT_1, ADC1_CHANNEL_4, adcI2SConfig);
     adcSampler->start();
 }
-#include "sampleaudio.h"
-static int current_pos = 0;
 uint8_t *audio_encode_packet(int *len)
 {
-    //adcSampler->read(codec_decoded_buffer, codec_samples_cnt);
-    memcpy(codec_decoded_buffer, __out_pcm + current_pos, codec_samples_cnt * 2);
-    current_pos += codec_samples_cnt * 2;
-    if(current_pos >= __out_pcm_len)
-        current_pos = 0;
+    adcSampler->read(codec_decoded_buffer, codec_samples_cnt);
+    //memcpy(codec_decoded_buffer, __out_pcm + current_pos, codec_samples_cnt * 2);
+    //current_pos += codec_samples_cnt * 2;
+    //if (current_pos >= __out_pcm_len)
+    //    current_pos = 0;
     codec2_encode(codec2, codec_encoded_buffer, codec_decoded_buffer);
     *len = codec_encoded_byte;
     return codec_encoded_buffer;
@@ -62,7 +60,7 @@ uint8_t *audio_encode_packet(int *len)
 
 void audio_decode_packet(uint8_t *data, int len, uint8_t *output_buffer, int *output_size)
 {
-    if(len != codec_encoded_byte)
+    if (len != codec_encoded_byte)
     {
         Serial.println("error");
         return;
@@ -74,4 +72,51 @@ void audio_decode_packet(uint8_t *data, int len, uint8_t *output_buffer, int *ou
         output_buffer[i] = (codec_decoded_buffer[i] + 32768) >> 8;
     }
     *output_size = codec_samples_cnt;
+}
+#define AUDIO_BUFFER_MAX 40000
+static int16_t *audio_buffer;
+void audio_adc_manual_init()
+{
+    pinMode(PIN_MIC, ANALOG);
+    analogSetWidth(12);
+    audio_buffer = (int16_t *)malloc(AUDIO_BUFFER_MAX * sizeof(int16_t));
+    if(audio_buffer == NULL)
+    while (1)
+    {
+        ;
+    }
+    
+}
+static int audio_buffer_size = 0;
+static int current_pos_manual = 0;
+
+void audio_adc_manual_reset()
+{
+    audio_buffer_size = 0;
+    current_pos_manual = 0;
+}
+
+void audio_adc_continue_40ms()
+{
+    if (audio_buffer_size >= AUDIO_BUFFER_MAX)
+        return;
+    for (int i = 0; i < 40 * 8; ++i)
+    {
+        audio_buffer[audio_buffer_size] = analogRead(PIN_MIC);
+        audio_buffer[audio_buffer_size] = (audio_buffer[audio_buffer_size] + 700 - 2048);
+        audio_buffer[audio_buffer_size] *= 16;
+        audio_buffer_size++;
+        delayMicroseconds(1000 / 23);
+    }
+}
+
+uint8_t *audio_encode_packet_manual(int *len)
+{
+    memcpy(codec_decoded_buffer, audio_buffer + current_pos_manual, codec_samples_cnt * 2);
+    current_pos_manual += codec_samples_cnt;
+    if (current_pos_manual >= audio_buffer_size)
+        return NULL;
+    codec2_encode(codec2, codec_encoded_buffer, codec_decoded_buffer);
+    *len = codec_encoded_byte;
+    return codec_encoded_buffer;
 }

@@ -512,21 +512,35 @@ void transmitter_fn_recorder()
             encode_packet(0x20, &data, 1);
             send_packet();
             start_transmit = false;
+            u8g2.clearBuffer();
+            u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+            u8g2.drawUTF8(10, 18, "功能 音频传输");
+            u8g2.drawUTF8(10, 36, "正在录音");
+            audio_adc_manual_reset();
+            // u8g2.enableUTF8Print();
+            // u8g2.setCursor(10, 54);
+            // u8g2.printf("已录音 %d个", total_opus_pkt);
+            u8g2.sendBuffer();
             while (buttonTX.isPressed())
             {
-                int len;
-                uint8_t *res = audio_encode_packet(&len);
-                appendOpusPacket(res, len);
-                u8g2.clearBuffer();
-                u8g2.setFont(u8g2_font_wqy14_t_gb2312);
-                u8g2.drawUTF8(10, 18, "功能 音频传输");
-                u8g2.drawUTF8(10, 36, "正在录音并传输");
-                u8g2.enableUTF8Print();
-                u8g2.setCursor(10, 54);
-                u8g2.printf("已录音 %d个", total_opus_pkt);
-                u8g2.sendBuffer();
-                delay(5);
+                audio_adc_continue_40ms();
             }
+            u8g2.clearBuffer();
+            u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+            u8g2.drawUTF8(10, 18, "功能 音频传输");
+            u8g2.drawUTF8(10, 36, "正在编码");
+            while (1)
+            {
+                int len;
+                uint8_t *res = audio_encode_packet_manual(&len);
+                if (res == NULL)
+                    break;
+                appendOpusPacket(res, len);
+            }
+            // u8g2.enableUTF8Print();
+            // u8g2.setCursor(10, 54);
+            // u8g2.printf("已录音 %d个", total_opus_pkt);
+            u8g2.sendBuffer();
 #ifdef DEBUG_TRANSMIT_LOOP
             xSemaphoreGive(audio_start_decode);
 #else
@@ -601,7 +615,7 @@ void setup()
 #endif
     protocol_init();
     dac_output_enable(DAC_CHANNEL_1);
-    audio_adc_init();
+    audio_adc_manual_init();
     audio_codec_init();
     buttonMod.init(PIN_KEY1);
     buttonTX.init(PIN_KEY2);

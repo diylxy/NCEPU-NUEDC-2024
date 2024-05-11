@@ -35,7 +35,7 @@ bool Button::isLongPressed()
 
 bool Button::isPressed()
 {
-    if (m_is_pressed && current_pressing_time >= SHORT_PRESS_TIME)
+    if (m_is_pressed && current_pressing_time >= SHORT_PRESS_TIME && digitalRead(m_pin) == 0)
         return true;
     return false;
 }
