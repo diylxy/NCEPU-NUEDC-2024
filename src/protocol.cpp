@@ -115,6 +115,7 @@ void send_packet()
     ledGreen_off();
 }
 
+#ifdef DEVICE_IS_RECEIVER
 uint8_t last_pkt_type = 0xff;
 int last_pkt_millis = 0;
 #define OLED_PACKET_SIZE 128
@@ -127,16 +128,11 @@ bool key_isPressing = false;
 bool key_isLongPressing = false;
 void check_0x02_timeout()
 {
-    if (millis() - last_pkt_millis > 90)
+    if (millis() - last_pkt_millis > 90 && last_pkt_type != 0x00)
     {
         ledRed_off();
         ledGreen_off();
         key_isPressing = false;
-    }
-    else if (last_pkt_type > 0x04)
-    {
-        ledRed_on();
-        ledGreen_off();
     }
 }
 void pkt_processor_task(void *)
@@ -147,7 +143,7 @@ void pkt_processor_task(void *)
     while (1)
     {
         check_0x02_timeout();
-        if (last_pkt_type != 0x02 && last_pkt_type != 0x03)
+        if (last_pkt_type != 0x02 && last_pkt_type != 0x03 && last_pkt_type != 0x00)
         {
             key_isPressing = false;
             key_isLongPressing = false;
@@ -233,6 +229,57 @@ void pkt_processor_task(void *)
             }
         }
         delay(10);
+    }
+}
+void task_non_encoding_mode(void *)
+{
+    while (1)
+    {
+        if (buttonMod.isPressed())
+        {
+            int last_input_buffer_pointer;
+            last_pkt_type = 0x00;
+            morse_input[0] = 0;
+            morse_input_pointer = 0;
+            morse_buffer[0] = 0;
+            morse_buffer_pointer = 0;
+            last_input_buffer_pointer = -1;
+            u8g2.clearBuffer();
+            u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+            u8g2.drawUTF8(10, 18, "功能0 非编码模式");
+            u8g2.sendBuffer();
+            buttonMod.waitRelease();
+            beeper.beep(10);
+            while (buttonMod.isPressed() == false)
+            {
+                if (digitalRead(PIN_RX2) == 0)
+                {
+                    key_isPressing = true;
+                    beeper.beep(30);
+                }
+                else
+                {
+                    key_isPressing = false;
+                    beeper.stop();
+                }
+                if (last_input_buffer_pointer != morse_input_pointer)
+                {
+                    last_input_buffer_pointer = morse_buffer_pointer;
+                    u8g2.clearBuffer();
+                    u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+                    u8g2.drawUTF8(10, 18, "功能 非编码模式");
+                    u8g2.drawUTF8(10, 36, morse_input);
+                    u8g2.sendBuffer();
+                }
+                delay(20);
+            }
+            buttonMod.waitRelease();
+            u8g2.clearBuffer();
+            u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+            u8g2.drawUTF8(10, 18, "已退出非编码模式");
+            u8g2.sendBuffer();
+        }
+        delay(100);
     }
 }
 void pkt_processor_0x01()
@@ -513,10 +560,10 @@ static void task_serial2(void *)
         default:
             continue;
         }
-            for (int i = 0; i < payload_len; ++i)
-            {
-                packet_buffer[i + 2] = serial_read();
-            }
+        for (int i = 0; i < payload_len; ++i)
+        {
+            packet_buffer[i + 2] = serial_read();
+        }
         packet_buffer[payload_len + 2] = serial_read();
 #ifdef RX_DEBUG_MODE
         Serial.println("checksum");
@@ -535,7 +582,7 @@ static void task_serial2(void *)
         process_packet();
     }
 }
-
+#endif
 void protocol_init()
 {
 #ifdef DEVICE_IS_RECEIVER
@@ -543,6 +590,7 @@ void protocol_init()
     Serial2.setTimeout(portMAX_DELAY);
     xTaskCreatePinnedToCore(task_serial2, "task_serial2", 8192, NULL, 30, NULL, 1);
     xTaskCreatePinnedToCore(pkt_processor_task, "pkt_processor_task", 4096, NULL, 6, NULL, 1);
+    xTaskCreatePinnedToCore(task_non_encoding_mode, "task_non_encoding_mode", 4096, NULL, 5, NULL, 1);
 #else
 #ifdef TX_DEBUG_MODE
     Serial2.begin(5000, SERIAL_8N1, PIN_DUMMY, PIN_RX2);

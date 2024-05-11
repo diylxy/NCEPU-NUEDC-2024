@@ -153,6 +153,35 @@ void playAudioBuffer()
     xSemaphoreGive(audio_start_decode);
 }
 #ifndef DEVICE_IS_RECEIVER
+void transmitter_fn_passthrough()
+{
+    buttonMod.waitRelease();
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+    u8g2.drawUTF8(10, 18, "功能0 非编码模式");
+    u8g2.sendBuffer();
+    while (buttonMod.isPressed() == false)
+    {
+        if (buttonTX.isPressed())
+        {
+            digitalWrite(OUTPUT_PIN, OUT_LEVEL_0);
+            beeper.beep(10);
+            ledGreen_on();
+        }
+        else
+        {
+            digitalWrite(OUTPUT_PIN, OUT_LEVEL_1);
+            beeper.stop();
+            ledGreen_off();
+        }
+        delay(5);
+    }
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+    u8g2.drawUTF8(10, 18, "正在切换功能");
+    u8g2.sendBuffer();
+    buttonMod.waitRelease();
+}
 void transmitter_fn_0x01()
 {
     uint8_t data;
@@ -286,6 +315,108 @@ void morse_tx_string(const char *str)
             delay(GAP_THRESHOLD + 400);
         }
         ++str;
+    }
+}
+void morse_tx_string_noenc(const char *str)
+{
+    uint8_t data;
+    uint32_t millis_target = 0;
+    while (*str)
+    {
+        char *morse = findMorseReverse(*str);
+        if (morse)
+        {
+            while (*morse)
+            {
+                if (*morse == '.')
+                {
+                    millis_target = millis() + LONG_THRESHOLD / 3;
+                    while (millis_target - millis() <= LONG_THRESHOLD / 3)
+                    {
+                        digitalWrite(OUTPUT_PIN, OUT_LEVEL_0);
+                        beeper.beep(10);
+                        ledGreen_on();
+                        delay(2);
+                    }
+                    digitalWrite(OUTPUT_PIN, OUT_LEVEL_1);
+                    beeper.stop();
+                    ledGreen_off();
+                }
+                else if (*morse == '-')
+                {
+                    millis_target = millis() + LONG_THRESHOLD + 100;
+                    while (millis_target - millis() <= LONG_THRESHOLD + 100)
+                    {
+                        digitalWrite(OUTPUT_PIN, OUT_LEVEL_0);
+                        beeper.beep(10);
+                        ledGreen_on();
+                        delay(2);
+                    }
+                    digitalWrite(OUTPUT_PIN, OUT_LEVEL_1);
+                    beeper.stop();
+                    ledGreen_off();
+                }
+                delay(LONG_THRESHOLD / 2);
+                morse++;
+            }
+            delay(GAP_THRESHOLD + 400);
+        }
+        ++str;
+    }
+}
+void transmitter_fn_0x03_noenc()
+{
+    uint8_t data;
+    Serial.println("字符串模式");
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+    u8g2.drawUTF8(10, 18, "功能6a 字符串模式");
+    u8g2.drawUTF8(10, 36, "非编码");
+    u8g2.sendBuffer();
+    channel_sync(10);
+    while (1)
+    {
+        if (buttonTX.isPressed())
+        {
+            morse_tx_string_noenc("XS019");
+        }
+        if (buttonMod.isPressed())
+        {
+            u8g2.clearBuffer();
+            u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+            u8g2.drawUTF8(10, 18, "正在切换功能");
+            u8g2.sendBuffer();
+            buttonMod.waitRelease();
+            break;
+        }
+        delay(10);
+    }
+}
+void transmitter_fn_0x04_noenc()
+{
+    Serial.println("功能6b SOS");
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+    u8g2.drawUTF8(10, 18, "功能6b SOS");
+    u8g2.drawUTF8(10, 36, "非编码");
+    u8g2.sendBuffer();
+    channel_sync(10);
+    while (1)
+    {
+        if (buttonTX.isPressed())
+        {
+            morse_tx_string_noenc("SOS");
+        }
+        if (buttonMod.isPressed())
+        {
+            u8g2.clearBuffer();
+            u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+            u8g2.drawUTF8(10, 18, "正在切换功能");
+            u8g2.sendBuffer();
+            buttonMod.waitRelease();
+            break;
+        }
+        delay(10);
     }
 }
 void transmitter_fn_0x03()
@@ -583,7 +714,9 @@ void task_loop(void *)
 {
     while (1)
     {
-
+        transmitter_fn_passthrough();
+        transmitter_fn_0x03_noenc();
+        transmitter_fn_0x04_noenc();
         transmitter_fn_0x01();
         transmitter_fn_0x02();
         transmitter_fn_0x03();
