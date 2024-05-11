@@ -6,7 +6,7 @@
 #include "button.h"
 #include "audio.h"
 #include "beeper.h"
-// #define DEVICE_IS_RECEIVER
+#define DEVICE_IS_RECEIVER
 #define STOP_BIT_LEN_2
 // #define TX_DEBUG_MODE
 // #define RX_DEBUG_MODE

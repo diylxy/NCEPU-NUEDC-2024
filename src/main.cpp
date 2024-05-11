@@ -280,7 +280,7 @@ void morse_tx_string(const char *str)
                     send_packet();
                     beeper.stop();
                 }
-                delay(LONG_THRESHOLD);
+                delay(LONG_THRESHOLD / 2);
                 morse++;
             }
             delay(GAP_THRESHOLD + 400);

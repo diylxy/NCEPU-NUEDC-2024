@@ -1,6 +1,6 @@
 #include "main.h"
 
-const int mode = CODEC2_MODE_1600;
+const int mode = CODEC2_MODE_3200;
 const int natural = 1;
 
 CODEC2 *codec2;
@@ -104,7 +104,7 @@ void audio_adc_continue_40ms()
     {
         audio_buffer[audio_buffer_size] = analogRead(PIN_MIC);
         audio_buffer[audio_buffer_size] = (audio_buffer[audio_buffer_size] + 700 - 2048);
-        audio_buffer[audio_buffer_size] *= 16;
+        audio_buffer[audio_buffer_size] *= 28;
         audio_buffer_size++;
         delayMicroseconds(1000 / 23);
     }
